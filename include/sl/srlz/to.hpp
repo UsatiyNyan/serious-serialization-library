@@ -45,6 +45,11 @@ struct assign_to {
     constexpr void operator()(DstT& dst, field_dst_type dst_value) const {
         dst[field_name.chars] = std::move(dst_value);
     }
+
+    template <typename field_dst_type>
+    constexpr void operator()(DstT& dst, std::string_view field_name, field_dst_type dst_value) const {
+        dst[field_name.data()] = std::move(dst_value);
+    }
 };
 
 template <typename DstT, typename T>
