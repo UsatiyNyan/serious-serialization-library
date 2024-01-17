@@ -15,19 +15,30 @@ using JSON = std::string;
 
 template <>
 struct impl::init_to<JSON> {
-    template <typename... Args>
-    constexpr JSON operator()(Args&&...) const {
+    template <typename T, typename... Args>
+    constexpr JSON operator()(const T&, Args&&...) const {
         return JSON{ "{" };
+    }
+
+    template <typename T, typename... Args>
+        requires(meta::is_range<T> && !meta::is_mapping_v<T>)
+    constexpr JSON operator()(const T&, Args&&...) const {
+        return JSON{ "[" };
     }
 };
 
 template <>
 struct impl::finalize_to<JSON> {
-    constexpr void operator()(JSON& dst) const {
+    template <typename T>
+    constexpr void operator()(JSON& dst, const T&) const {
         if (dst.ends_with(',')) {
             dst.pop_back();
         }
-        dst += "}";
+        if constexpr (meta::is_range<T> && !meta::is_mapping_v<T>) {
+            dst += "]";
+        } else {
+            dst += "}";
+        }
     }
 };
 
@@ -42,6 +53,11 @@ struct impl::assign_to<JSON> {
     constexpr void operator()(JSON& dst, std::string_view field_name, field_dst_type dst_value) const {
         dst += fmt::format("\"{}\":{},", field_name, dst_value);
     }
+
+    template <typename field_dst_type>
+    constexpr void operator()(JSON& dst, std::size_t, field_dst_type dst_value) const {
+        dst += (dst_value + ',');
+    }
 };
 
 template <typename T>
@@ -54,33 +70,6 @@ struct impl::to<JSON, T> {
         } else {
             return fmt::format("{}", value);
         }
-    }
-};
-
-template <typename T>
-    requires meta::is_specialization_v<T, std::vector>
-struct impl::to<JSON, T> {
-    template <typename... Args>
-    constexpr JSON operator()(const T& value, Args&&...) const {
-        constexpr impl::to<JSON, typename T::value_type> to_f;
-        const auto value_transformed = ranges::views::transform(value, [to_f](const auto& elem) { return to_f(elem); });
-        return fmt::format("[{}]", fmt::join(value_transformed, ","));
-    }
-};
-
-template <typename T>
-    requires meta::is_specialization_v<T, std::unordered_map>
-struct impl::to<JSON, T> {
-    template <typename... Args>
-    constexpr JSON operator()(const T& value, Args&&...) const {
-        JSON dst = impl::init_to<JSON>{}();
-        constexpr impl::to<JSON, typename T::mapped_type> to_f;
-        constexpr impl::assign_to<JSON> assign_to_f;
-        for (const auto& [key, elem] : value) {
-            assign_to_f(dst, std::string_view{ key }, to_f(elem));
-        }
-        impl::finalize_to<JSON>{}(dst);
-        return dst;
     }
 };
 
