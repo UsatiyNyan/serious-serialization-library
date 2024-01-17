@@ -6,7 +6,6 @@
 
 #include "sl/srlz/field.hpp"
 
-#include <concepts>
 #include <range/v3/view/enumerate.hpp>
 
 #include <sl/meta/traits.hpp>
@@ -17,9 +16,6 @@
 
 namespace sl::srlz {
 namespace impl {
-
-template <typename DstT, typename T>
-struct to;
 
 template <typename DstT>
 struct init_to {
@@ -37,31 +33,41 @@ struct finalize_to {
 };
 
 template <typename DstT>
-struct field_to {
-    template <typename field_type, meta::string field_name>
-    struct dst {
-        using type = DstT;
-    };
-};
-
-template <typename DstT>
 struct assign_to {
-    // field assignment
-    template <typename field_dst_type, meta::string field_name>
-    constexpr void operator()(DstT& dst, field_dst_type dst_value) const {
-        dst[field_name.chars] = std::move(dst_value);
-    }
+    // assignment
+    constexpr void operator()(DstT& dst, DstT dst_value) const { dst = std::move(dst_value); }
 
     // mapping assignment
-    template <typename field_dst_type>
-    constexpr void operator()(DstT& dst, std::string_view field_name, field_dst_type dst_value) const {
+    constexpr void operator()(DstT& dst, std::string_view field_name, DstT dst_value) const {
         dst[field_name.data()] = std::move(dst_value);
     }
 
     // range assignment
-    template <typename field_dst_type>
-    constexpr void operator()(DstT& dst, std::size_t i, field_dst_type dst_value) const {
-        dst[i] = std::move(dst_value);
+    constexpr void operator()(DstT& dst, std::size_t i, DstT dst_value) const { dst[i] = std::move(dst_value); }
+};
+
+template <typename DstT, typename T>
+struct to {
+    template <typename... Args>
+    constexpr DstT operator()(const T& value, Args&&... args) const {
+        constexpr impl::init_to<DstT> init_to_f;
+        DstT dst = init_to_f(value, std::forward<Args>(args)...);
+        constexpr impl::assign_to<DstT> assign_to_f;
+        assign_to_f(dst, DstT(value));
+        constexpr impl::finalize_to<DstT> finalize_to_f;
+        finalize_to_f(dst, value);
+        return dst;
+    }
+};
+
+template <typename DstT, typename field_type, meta::string field_name>
+struct to<DstT, srlz::field<field_type, field_name>> {
+    template <typename... Args>
+    constexpr tl::optional<DstT> operator()(const srlz::field<field_type, field_name>& field, Args&&... args) const {
+        return field.map([&](const field_type& field_value) {
+            constexpr impl::to<DstT, field_type> to_f;
+            return to_f(field_value, std::forward<Args>(args)...);
+        });
     }
 };
 
@@ -72,7 +78,7 @@ struct to<DstT, T> {
     constexpr DstT operator()(const T& value, Args&&... args) const {
         constexpr impl::init_to<DstT> init_to_f;
         DstT dst = init_to_f(value, std::forward<Args>(args)...);
-        meta::for_each([&dst](const auto& field) { reduce_to(dst, field); }, value);
+        meta::for_each([&](const auto& field) { reduce_to(dst, field, std::forward<Args>(args)...); }, value);
         constexpr impl::finalize_to<DstT> finalize_to_f;
         finalize_to_f(dst, value);
         return dst;
@@ -81,14 +87,12 @@ struct to<DstT, T> {
 private:
     template <typename field_type, meta::string field_name, typename... Args>
     static constexpr void reduce_to(DstT& dst, const srlz::field<field_type, field_name>& field, Args&&... args) {
-        using field_to_f = impl::field_to<DstT>;
-        using field_dst_type = typename field_to_f::template dst<field_type, field_name>::type;
-        field.map([&](const field_type& field_value) {
-            constexpr impl::assign_to<DstT> assign_to_f;
-            constexpr impl::to<field_dst_type, field_type> to_f;
-            assign_to_f.template operator()<field_dst_type, field_name> //
-                (dst, to_f(field_value, std::forward<Args>(args)...));
-        });
+        constexpr impl::to<DstT, srlz::field<field_type, field_name>> to_f;
+        to_f(field, std::forward<Args>(args)...) //
+            .map([&dst](DstT&& dst_value) {
+                constexpr impl::assign_to<DstT> assign_to_f;
+                assign_to_f(dst, field_name.string_view(), std::move(dst_value));
+            });
     }
 };
 
