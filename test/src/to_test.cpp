@@ -82,7 +82,7 @@ struct TestSimpleStruct {
 struct TestStruct {
     field<int, "i"> i;
     field<TestSimpleStruct, "simple"> simple;
-    field<std::unordered_map<std::string, int>, "umi"> umi;
+    field<std::map<std::string, int>, "mi"> mi;
 };
 
 TEST(toFmtJson, simpleStruct) {
@@ -91,14 +91,45 @@ TEST(toFmtJson, simpleStruct) {
     ASSERT_EQ(json_str, R"({"i":123,"vc":["a","b","c"],"s":"oraoraoraora"})");
 }
 
+TEST(toFmtJson, simpleStructSkipFields) {
+    TestSimpleStruct simple_object{ .i = tl::nullopt, .vc = std::vector{ 'a', 'b', 'c' }, .s = tl::nullopt };
+    const auto json_str = to<JSON>(simple_object);
+    ASSERT_EQ(json_str, R"({"vc":["a","b","c"]})");
+}
+
+TEST(toFmtJson, simpleStructEmptyVec) {
+    TestSimpleStruct simple_object{ .i = 123, .vc = std::vector<char>{}, .s = "oraoraoraora" };
+    const auto json_str = to<JSON>(simple_object);
+    ASSERT_EQ(json_str, R"({"i":123,"vc":[],"s":"oraoraoraora"})");
+}
+
 TEST(toFmtJson, struct) {
     TestStruct object{ .i = 123,
                        .simple = TestSimpleStruct{ .i = 456, .vc = std::vector{ 'a', 'b', 'c' }, .s = "oraoraoraora" },
-                       .umi = std::unordered_map<std::string, int>{
+                       .mi = std::map<std::string, int>{
                            { "i_key", 7 },
+                           { "j_key", 13 },
                        } };
     const auto json_str = to<JSON>(object);
-    ASSERT_EQ(json_str, R"({"i":123,"simple":{"i":456,"vc":["a","b","c"],"s":"oraoraoraora"},"umi":{"i_key":7}})");
+    ASSERT_EQ(
+        json_str, R"({"i":123,"simple":{"i":456,"vc":["a","b","c"],"s":"oraoraoraora"},"mi":{"i_key":7,"j_key":13}})"
+    );
+}
+
+TEST(toFmtJson, structSkipFields) {
+    TestStruct object{ .i = 123,
+                       .simple = TestSimpleStruct{ .i = 456, .vc = std::vector{ 'a', 'b', 'c' }, .s = tl::nullopt },
+                       .mi = tl::nullopt };
+    const auto json_str = to<JSON>(object);
+    ASSERT_EQ(json_str, R"({"i":123,"simple":{"i":456,"vc":["a","b","c"]}})");
+}
+
+TEST(toFmtJson, structEmptyMap) {
+    TestStruct object{ .i = 123,
+                       .simple = TestSimpleStruct{ .i = 456, .vc = std::vector{ 'a', 'b', 'c' }, .s = "oraoraoraora" },
+                       .mi = std::map<std::string, int>{} };
+    const auto json_str = to<JSON>(object);
+    ASSERT_EQ(json_str, R"({"i":123,"simple":{"i":456,"vc":["a","b","c"],"s":"oraoraoraora"},"mi":{}})");
 }
 
 } // namespace sl::srlz
