@@ -15,26 +15,24 @@ using JSON = std::string;
 
 template <>
 struct impl::init_to<JSON> {
-    template <typename T, typename... Args>
-    constexpr JSON operator()(const T&, Args&&...) const {
-        return JSON{ "{" };
-    }
-
-    template <typename T, typename... Args>
-        requires(meta::is_range<T> && !meta::is_mapping_v<T>)
-    constexpr JSON operator()(const T&, Args&&...) const {
-        return JSON{ "[" };
+    template <typename SrcT, typename... Args>
+    constexpr JSON operator()(const SrcT&, Args&&...) const {
+        if constexpr (meta::is_range<SrcT> && !meta::is_mapping_v<SrcT>) {
+            return "[";
+        } else {
+            return "{";
+        }
     }
 };
 
 template <>
 struct impl::finalize_to<JSON> {
-    template <typename T>
-    constexpr void operator()(JSON& dst, const T&) const {
+    template <typename SrcT>
+    constexpr void operator()(JSON& dst, const SrcT&) const {
         if (dst.ends_with(',')) {
             dst.pop_back();
         }
-        if constexpr (meta::is_range<T> && !meta::is_mapping_v<T>) {
+        if constexpr (meta::is_range<SrcT> && !meta::is_mapping_v<SrcT>) {
             dst += "]";
         } else {
             dst += "}";
@@ -44,31 +42,24 @@ struct impl::finalize_to<JSON> {
 
 template <>
 struct impl::assign_to<JSON> {
-    template <typename field_dst_type, meta::string field_name>
-    constexpr void operator()(JSON& dst, field_dst_type dst_value) const {
-        operator()(dst, field_name.string_view(), dst_value);
-    }
-
-    template <typename field_dst_type>
-    constexpr void operator()(JSON& dst, std::string_view field_name, field_dst_type dst_value) const {
+    // mapping assignment
+    constexpr void operator()(JSON& dst, std::string_view field_name, JSON dst_value) const {
         dst += fmt::format("\"{}\":{},", field_name, dst_value);
     }
 
-    template <typename field_dst_type>
-    constexpr void operator()(JSON& dst, std::size_t, field_dst_type dst_value) const {
-        dst += (dst_value + ',');
-    }
+    // range assignment
+    constexpr void operator()(JSON& dst, std::size_t, JSON dst_value) const { dst += (dst_value + ','); }
 };
 
-template <typename T>
-    requires fmt::is_formattable<T, char>::value
-struct impl::to<JSON, T> {
+template <typename SrcT>
+    requires fmt::is_formattable<SrcT, char>::value
+struct impl::to<JSON, SrcT> {
     template <typename... Args>
-    constexpr JSON operator()(const T& value, Args&&...) const {
-        if constexpr (std::is_same_v<std::string, T> || std::is_same_v<char, T>) {
-            return fmt::format("\"{}\"", value);
+    constexpr JSON operator()(const SrcT& src, Args&&...) const {
+        if constexpr (std::is_same_v<std::string, SrcT> || std::is_same_v<char, SrcT>) {
+            return fmt::format("\"{}\"", src);
         } else {
-            return fmt::format("{}", value);
+            return fmt::format("{}", src);
         }
     }
 };
