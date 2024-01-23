@@ -14,6 +14,8 @@ template <typename T, meta::string name_>
 struct field : tl::optional<T> {
     static constexpr auto name = name_.chars;
     using tl::optional<T>::optional;
+    using tl::optional<T>::operator=;
+    bool operator==(const field&) const = default;
 };
 
 } // namespace sl::srlz

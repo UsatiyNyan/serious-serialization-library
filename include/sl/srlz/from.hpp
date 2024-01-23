@@ -50,12 +50,12 @@ struct items_from {
 template <typename DstT>
 struct assign_from {
     // mapping assignment
-    constexpr void operator()(DstT& dst, std::string_view key, DstT::mapped_type&& dst_value) const {
+    constexpr void operator()(DstT& dst, std::string_view key, typename DstT::mapped_type&& dst_value) const {
         dst.insert_or_assign(key, std::move(dst_value));
     }
 
     // range assignment
-    constexpr void operator()(DstT& dst, std::size_t i, DstT::value_type&& dst_value) const {
+    constexpr void operator()(DstT& dst, std::size_t i, typename DstT::value_type&& dst_value) const {
         constexpr bool is_array_like = std::is_same_v<decltype(DstT::size()), std::size_t> || std::is_array_v<DstT>;
         using dst_vt = typename DstT::value_type;
         constexpr bool is_vector_like =
