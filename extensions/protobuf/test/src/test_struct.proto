@@ -1,0 +1,13 @@
+syntax = "proto3";
+
+message TestSimpleStruct {
+  int32 i = 1;
+  bytes vc = 2;
+  string s = 3;
+}
+
+message TestStruct {
+  int32 i = 1;
+  TestSimpleStruct simple = 2;
+  map<string, int32> mi = 3;
+}
